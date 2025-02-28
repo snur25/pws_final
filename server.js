@@ -28,7 +28,6 @@ try {
 }
 
 // own modules
-const websocket = require("./websocket");
 const auth = require("./auth");
 const person = require("./person");
 const project = require("./project");
@@ -59,11 +58,19 @@ passport.deserializeUser(auth.deserialize);
 // websocket endpoint
 const wsEndpoint = "/ws";
 const wsInstance = expressWs(app);
+
+// Import websocket after creating the instance
+const websocket = require("./websocket");
+
 app.ws(
   wsEndpoint,
   (ws, req, next) => session(req, {}, next),
   websocket(wsInstance)
 );
+
+// Assign websocket instance to modules for broadcasting updates
+project.wsInstance = wsInstance;
+task.wsInstance = wsInstance;
 
 app.use(express.static(config.frontend));
 

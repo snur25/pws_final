@@ -23,6 +23,7 @@ import PersonList from './components/PersonList.vue'
 import ProjectList from './components/ProjectList.vue'
 import Charts from './components/Charts.vue'
 import Chat from './components/Chat.vue'
+import Analysis from './components/Analysis.vue'
 
 // Router
 import { createRouter, createWebHashHistory } from 'vue-router'
@@ -34,7 +35,8 @@ const router = createRouter({
         { path: '/persons', component: PersonList, icon: 'mdi-account-tie-woman', title: 'Persons', roles: [0,1] },
         { path: '/projects', component: ProjectList, icon: 'mdi-projector', title: 'Projects' },
         { path: '/charts', component: Charts, icon: 'mdi-chart-bar', title: 'Charts' },
-        { path: '/chat', component: Chat, icon: 'mdi-chat', title: 'Chat', roles: [0,1] }
+        { path: '/chat', component: Chat, icon: 'mdi-chat', title: 'Chat', roles: [0,1] },
+        { path: '/analysis', component: Analysis, icon: 'mdi-chart-gantt', title: 'Analysis', roles: [0] }
     ]
 })
 

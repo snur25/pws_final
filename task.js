@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const task = (module.exports = {
   model: null,
   endpoint: "/api/task",
+  wsInstance: null, // This will be set by server.js
   init: (conn) => {
     task.schema = new mongoose.Schema(
       {
@@ -45,17 +46,16 @@ const task = (module.exports = {
       sort[req.query.sort] = +req.query.order || 1;
     }
 
-    const matching = {
-      $match: {
-        name: { $regex: req.query.search || "", $options: "i" },
-        project_id: req.query.project_id,
-      },
+    const matchCriteria = {
+      name: { $regex: req.query.search || "", $options: "i" }
     };
 
-    if (!req.query.project_id) {
-      res.status(400).json({ error: "project_id is required" });
-      return;
+    // Add project_id to matching criteria if provided
+    if (req.query.project_id) {
+      matchCriteria.project_id = req.query.project_id;
     }
+
+    const matching = { $match: matchCriteria };
 
     const aggregation = [matching];
 
@@ -67,6 +67,7 @@ const task = (module.exports = {
     if (!isNaN(limit) && limit > 0) {
       aggregation.push({ $limit: limit });
     }
+    
     task.model
       .aggregate([
         {
@@ -97,6 +98,16 @@ const task = (module.exports = {
     item
       .save()
       .then((row) => {
+        // Broadcast task update
+        if (task.wsInstance && task.wsInstance.broadcast) {
+          task.wsInstance.broadcast({
+            type: 'update',
+            entity: 'task',
+            action: 'create',
+            taskId: row._id,
+            projectId: row.project_id
+          });
+        }
         res.json(row);
       })
       .catch((err) => {
@@ -109,6 +120,7 @@ const task = (module.exports = {
       res.status(400).json({ error: "no _id!" });
       return;
     }
+    const projectId = req.body.project_id;
     delete req.body._id;
     task.model
       .findOneAndUpdate(
@@ -117,6 +129,16 @@ const task = (module.exports = {
         { new: true, runValidators: true }
       )
       .then((row) => {
+        // Broadcast task update
+        if (task.wsInstance && task.wsInstance.broadcast) {
+          task.wsInstance.broadcast({
+            type: 'update',
+            entity: 'task',
+            action: 'update',
+            taskId: _id,
+            projectId: projectId || row.project_id
+          });
+        }
         res.json(row);
       })
       .catch((err) => {
@@ -129,10 +151,32 @@ const task = (module.exports = {
       res.status(400).json({ error: "no _id!" });
       return;
     }
-    task.model
-      .findOneAndDelete({ _id })
-      .then((row) => {
-        res.json(row);
+    
+    // First, get the task to retrieve the project_id
+    task.model.findOne({ _id })
+      .then(taskDoc => {
+        if (!taskDoc) {
+          res.status(404).json({ error: "Task not found" });
+          return;
+        }
+        
+        const projectId = taskDoc.project_id;
+        
+        // Now delete the task
+        return task.model.findOneAndDelete({ _id })
+          .then((row) => {
+            // Broadcast task update
+            if (task.wsInstance && task.wsInstance.broadcast) {
+              task.wsInstance.broadcast({
+                type: 'update',
+                entity: 'task',
+                action: 'delete',
+                taskId: _id,
+                projectId: projectId
+              });
+            }
+            res.json(row);
+          });
       })
       .catch((err) => {
         res.status(400).json({ error: err.message });

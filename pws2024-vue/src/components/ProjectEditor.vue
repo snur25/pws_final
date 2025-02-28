@@ -23,25 +23,41 @@ export default {
           return !!date || "Use a proper date";
         },
       },
-      tasksShow: false,
+      tasksDialog: false,
     };
   },
   props: ["project", "persons"],
-  emits: ["close", "listChanged", "tasksOpen"],
+  emits: ["close", "listChanged"],
   methods: {
     send() {
+      // Format dates properly for API
+      const projectData = { ...this.input };
+      
+      if (projectData.startDate) {
+        const startDate = new Date(projectData.startDate);
+        if (!isNaN(startDate.getTime())) {
+          projectData.startDate = startDate.toISOString();
+        }
+      }
+      
+      if (projectData.endDate) {
+        const endDate = new Date(projectData.endDate);
+        if (!isNaN(endDate.getTime())) {
+          projectData.endDate = endDate.toISOString();
+        }
+      }
+      
       fetch(projectEndpoint, {
         method: "POST",
         headers: { "Content-type": "application/json" },
-        body: JSON.stringify(this.input),
+        body: JSON.stringify(projectData),
       }).then((res) => {
         res
           .json()
           .then((data) => {
-            if (!res.ok) {
+            if(!res.ok) {
               this.$emit("close", data.error, "error");
             } else {
-              this.input = {};
               this.$emit("close", `Project ${data.name} - added`);
               this.$emit("listChanged");
             }
@@ -52,18 +68,34 @@ export default {
       });
     },
     update() {
+      // Format dates properly for API
+      const projectData = { ...this.input };
+      
+      if (projectData.startDate) {
+        const startDate = new Date(projectData.startDate);
+        if (!isNaN(startDate.getTime())) {
+          projectData.startDate = startDate.toISOString();
+        }
+      }
+      
+      if (projectData.endDate) {
+        const endDate = new Date(projectData.endDate);
+        if (!isNaN(endDate.getTime())) {
+          projectData.endDate = endDate.toISOString();
+        }
+      }
+      
       fetch(projectEndpoint, {
         method: "PUT",
         headers: { "Content-type": "application/json" },
-        body: JSON.stringify(this.input),
+        body: JSON.stringify(projectData),
       }).then((res) => {
         res
           .json()
           .then((data) => {
-            if (!res.ok) {
+            if(!res.ok) {
               this.$emit("close", data.error, "error");
             } else {
-              this.input = {};
               this.$emit("close", `Project ${data.name} - updated`);
               this.$emit("listChanged");
             }
@@ -83,10 +115,9 @@ export default {
         res
           .json()
           .then((data) => {
-            if (!res.ok) {
+            if(!res.ok) {
               this.$emit("close", data.error, "error");
             } else {
-              this.input = {};
               this.$emit("close", `Project ${data.name} - deleted`);
               this.$emit("listChanged");
             }
@@ -96,10 +127,6 @@ export default {
           });
       });
     },
-    setData(data) {
-      this.input = {};
-      Object.assign(this.input, data);
-    },
     clear() {
       this.input = { _id: this.input._id };
       this.isValid = false;
@@ -107,27 +134,55 @@ export default {
     close() {
       this.$emit("close");
     },
-    tasksOpen() {
-      this.$emit("tasksOpen");
-    },
-    tasksOpen() {
-      this.tasksShow = true;
+    showTasks() {
+      this.tasksDialog = true;
     },
     closeTasks() {
-      this.tasksShow = false;
+      this.tasksDialog = false;
+      this.$emit("listChanged");
     },
+    formatDateForInput(dateString) {
+      if (!dateString) return '';
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().substring(0, 10);
+      } catch (e) {
+        return '';
+      }
+    }
   },
   mounted() {
-    Object.assign(this.input, this.project);
-    fetch(
-      personEndpoint +
-        "?" +
-        new URLSearchParams({ sort: "lastName", order: 1 }).toString()
-    ).then((res) =>
-      res.json().then((facet) => {
-        this.personItems = facet.data;
-      })
-    );
+    // Make a copy of the project and format dates for input fields
+    this.input = { ...this.project };
+    
+    if (this.input.startDate) {
+      this.input.startDate = this.formatDateForInput(this.input.startDate);
+    }
+    
+    if (this.input.endDate) {
+      this.input.endDate = this.formatDateForInput(this.input.endDate);
+    }
+    
+    // Ensure contractor_ids is an array
+    if (!Array.isArray(this.input.contractor_ids)) {
+      this.input.contractor_ids = [];
+    }
+    
+    // Load persons if not provided via props
+    if (!this.persons || this.persons.length === 0) {
+      fetch(
+        personEndpoint +
+          "?" +
+          new URLSearchParams({ sort: "lastName", order: 1 }).toString()
+      ).then((res) =>
+        res.json().then((facet) => {
+          this.personItems = facet.data;
+        })
+      );
+    } else {
+      this.personItems = this.persons;
+    }
   },
 };
 </script>
@@ -178,10 +233,9 @@ export default {
         <v-spacer></v-spacer>
 
         <v-btn
-          color="secondary"
+          color="info"
           variant="elevated"
-          @click="tasksOpen"
-          :disabled="!isValid"
+          @click="showTasks"
           v-if="input._id"
           >Tasks</v-btn
         >
@@ -211,8 +265,12 @@ export default {
       </v-card-actions>
     </v-card>
 
-    <v-dialog v-model="tasksShow" width="1000px">
-      <Tasks v-if="tasksShow" :projectId="input._id" @close="closeTasks" />
+    <v-dialog v-model="tasksDialog" width="800px">
+      <Tasks 
+        v-if="tasksDialog" 
+        :projectId="input._id" 
+        @close="closeTasks" 
+      />
     </v-dialog>
   </v-form>
 </template>
